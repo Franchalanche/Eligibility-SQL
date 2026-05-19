@@ -22,8 +22,9 @@ where [File_Name]  like '05712109%'
 
 update #date_substring
 SET YYYYMMDD = substring([File_Name],PATINDEX('%[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]%',[File_Name]),8)
-where [File_Name] like '%[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]%'
-	and [File_Name] NOT like '05712109%'
+where YYYYMMDD = 0
+	and [File_Name] like '%[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]%'
+	--and [File_Name] NOT like '05712109%'
 	;
 
 select * from #date_substring;
