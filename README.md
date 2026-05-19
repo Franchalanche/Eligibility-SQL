@@ -12,3 +12,6 @@
 
 4) [Stored Procedure - Eligibility_ALL_Raw_DB Staging to Final].sql
    Create final table, proposed name "WorkBench.dbo.Eligibility_ALL_RAW_DB" using a merge on records not currently in the the final table
+
+5) [File_Name_Date_RegEx].sql
+   Regex logic for file name date extraction to be added to the creation of the staging table
