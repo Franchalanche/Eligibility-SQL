@@ -1,6 +1,5 @@
 DROP TABLE IF EXISTS #column_data;
 
-
 SELECT
     'Premier' as [Server],
     s.name                    AS schema_name,
