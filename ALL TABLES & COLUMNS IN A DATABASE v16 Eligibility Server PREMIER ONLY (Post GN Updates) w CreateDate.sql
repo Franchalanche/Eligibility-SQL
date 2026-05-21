@@ -1,6 +1,5 @@
 DROP TABLE IF EXISTS #column_data;
 
-
 SELECT
     'Premier' as [Server],
     s.name                    AS schema_name,
@@ -82,33 +81,33 @@ GROUP BY c.[Server], c.[schema_name] , c.table_name
 ORDER BY c.[Server], c.[schema_name] , c.table_name;
 
  
- select * from #schema_summary
- ----select * from  [WorkBench].[dbo].[xxEligibility_All_RAW]
- --select count(distinct table_name) as schema_summary_tables from #schema_summary
- -- select count(distinct Source_table) as xxElig_Raw_Tables from [WorkBench].[dbo].[xxEligibility_All_RAW]
+ --select * from #schema_summary
+ ------select * from  [WorkBench].[dbo].[xxEligibility_All_RAW]
+ ----select count(distinct table_name) as schema_summary_tables from #schema_summary
+ ---- select count(distinct Source_table) as xxElig_Raw_Tables from [WorkBench].[dbo].[xxEligibility_All_RAW]
 
 
- select ',''['+s.table_name+']''',s.*
- from #schema_summary s
- left join (select distinct Source_Table from [WorkBench].[dbo].[xxEligibility_All_RAW]) xe
- on '[PRODELGBLTY1].[PREMIER_Eligibility_Staging].dbo.['+s.table_name+']' = xe.Source_Table
- where xe.Source_Table IS NULL
+ --select ',''['+s.table_name+']''',s.*
+ --from #schema_summary s
+ --left join (select distinct Source_Table from [WorkBench].[dbo].[xxEligibility_All_RAW]) xe
+ --on '[PRODELGBLTY1].[PREMIER_Eligibility_Staging].dbo.['+s.table_name+']' = xe.Source_Table
+ --where xe.Source_Table IS NULL
 
 
- DECLARE @sql_QC nvarchar(max)='';
+-- DECLARE @sql_QC nvarchar(max)='';
 
-SELECT @sql_QC += '
-SELECT * 
-FROM [PRODELGBLTY1].[PREMIER_Eligibility_Staging].dbo.['+table_name+'];'
-FROM #schema_summary s
-LEFT JOIN (
-    SELECT DISTINCT Source_Table
-    FROM [WorkBench].[dbo].[xxEligibility_All_RAW]
-) xe
-ON '[PRODELGBLTY1].[PREMIER_Eligibility_Staging].dbo.['+s.table_name+']' = xe.Source_Table
-WHERE xe.Source_Table IS NULL;
+--SELECT @sql_QC += '
+--SELECT * 
+--FROM [PRODELGBLTY1].[PREMIER_Eligibility_Staging].dbo.['+table_name+'];'
+--FROM #schema_summary s
+--LEFT JOIN (
+--    SELECT DISTINCT Source_Table
+--    FROM [WorkBench].[dbo].[xxEligibility_All_RAW]
+--) xe
+--ON '[PRODELGBLTY1].[PREMIER_Eligibility_Staging].dbo.['+s.table_name+']' = xe.Source_Table
+--WHERE xe.Source_Table IS NULL;
 
-EXEC sp_executesql @sql_QC;
+--EXEC sp_executesql @sql_QC;
 
 drop table if exists #Table_with_ID_Info;
 
@@ -116,6 +115,8 @@ SELECT
 	  [Server] 
 	, table_name
 	, case 
+		 when columns_csv like '%UNIQUE_ID%' then 'UNIQUE_ID' --Baker Donelson BCBS & UMR (Premier)
+		 when columns_csv like '%MemberNumber%' then 'MemberNumber' 
 		 when columns_csv like '%MEMB_SUBSCRIBER_NUMBER%' then 'MEMB_SUBSCRIBER_NUMBER' 
 		 when columns_csv like '%MEMBER ID (Assigned In Data Warehouse)%' then 'MEMBER ID (Assigned In Data Warehouse)' 
 		 when columns_csv like '%MEMBER ID%' then 'MEMBER ID' 
@@ -124,7 +125,6 @@ SELECT
 		 when columns_csv like '%MEMBER[_]ID%' then 'MEMBER_ID'
 		 when columns_csv like '%EmployeeID%' then 'EmployeeID' 
  		 when columns_csv like '%ContractID%' then 'ContractID'  --For Bloomberg (Employers)
-		 when columns_csv like '%UNIQUE_ID%' then 'UNIQUE_ID' --Baker Donelson BCBS & UMR (Premier)
 		 when columns_csv like '%MemberID%'  AND columns_csv NOT like '%alternatememberidentifier%'  then 'MemberID' --Jupiter Medical (Premier)
 		 when columns_csv like '%Employee Number%' then 'Employee Number' --Little Mendelson (Premier)
 		 when columns_csv like '%Employer[_]ID%' then 'Employer_ID' --LMI (Premier)
@@ -139,6 +139,7 @@ SELECT
 		 when columns_csv like '%SLNO%' then 'SLNO' --TBL_FIDELITY_DISNEY
 		ELSE 'NULL' END as [Member Identifier]
 	, case 
+		 when columns_csv like '%RelationshipCode%' then 'RelationshipCode' -- warner
 		 when columns_csv like '%Individual[_]Relationship[_]Code%' then 'Individual_Relationship_Code' -- disney fidelity
 		 when columns_csv like '%MBR[_]NBR[_]Actual%' then 'MBR_NBR_Actual' -- enbridge
 		 when columns_csv like '%MemberNumber%' then 'MemberNumber' 
@@ -392,6 +393,44 @@ SELECT
 	, case 
 		when columns_csv like '%EDIT[_]STATUS%' then 'EDIT_STATUS' 
 	 ELSE 'NULL' END as [Void Row Identifier] 
+
+	, case 
+		when columns_csv like '%CreatedDate%' then 'CreatedDate' 
+	 ELSE 'NULL' END as [IS CreateDate Identifier] 
+
+	, case 
+		when columns_csv like '%Dependent[_]Gender%' then 'Dependent_Gender' 
+		when columns_csv like '%Legal Gender%' then 'Legal Gender' 
+		when columns_csv like '%MembGender%' then 'MembGender' 
+		when columns_csv like '%Memb Gender%' then 'Memb Gender' 
+		when columns_csv like '%Member Gender%' then 'Member Gender' 
+		when columns_csv like '%Memb[_]Gender%' then 'Memb_Gender' 
+		when columns_csv like '%Member[_]Gender[_]Code%' then 'Member_Gender_Code' 
+		when columns_csv like '%Member[_]Gender%' then 'Member_Gender' 
+		when columns_csv like '%Emp[_]Gender%' then 'Emp_Gender' 
+		when columns_csv like '%Gender%' then 'Gender'
+	 ELSE 'NULL' END as [Gender Identifier] 
+
+	 , case
+		when columns_csv like '%ACTIVE[_]INDICATOR%' then 'ACTIVE_INDICATOR' 
+		when columns_csv like '%MEMB[_]ACTIVE[_]IND%' then 'MEMB_ACTIVE_IND' 		
+		when columns_csv like '%Active[_]IND%' then 'Active_IND' 
+		when columns_csv like '%DEPENDENT[_]ACTIVITY[_]INDICATOR%' then 'DEPENDENT_ACTIVITY_INDICATOR' 		
+		when columns_csv like '%EXISTING[_]PATIENT[_]INDICATOR%' then 'EXISTING_PATIENT_INDICATOR'
+		
+		when columns_csv like '%Coverage Status%' then 'Coverage Status' 		
+		when columns_csv like '%EMPLOYEE STATUS%' then 'EMPLOYEE STATUS' 		
+		when columns_csv like '%EMPLOYEE[_]STATUS%' then 'EMPLOYEE_STATUS' 		
+		when columns_csv like '%Employment status%' then 'Employment status' 		
+	 ELSE 'NULL' END as [Active Indicator Identifier] 
+
+	 , case
+		when columns_csv like '%RECORD[_]TYPE[_]IND%' then 'RECORD_TYPE_IND' 		
+		when columns_csv like '%RECORD TYPE%' then 'RECORD TYPE' 		
+		when columns_csv like '%Record[_]Type%' then 'Record_Type' 		
+		when columns_csv like '%RecordIdentifier%' then 'RecordIdentifier' 		
+	 ELSE 'NULL' END as [RecordType Identifier] 
+
 into #Table_with_ID_Info
 from #schema_summary s;
 
@@ -441,7 +480,11 @@ select
 	, t.[Start Date Identifier]
 	, t.[End Date Identifier]
 	, t.[Void Row Identifier]
+	, t.[IS CreateDate Identifier]
 	, t.[Source File Name Identifier]
+	, t.[Gender Identifier]
+	, t.[Active Indicator Identifier]
+	, t.[RecordType Identifier]
 into [WorkBench].[dbo].[Eligibility_Table_Identifiers_RAW]
 from #Table_with_ID_Info t
 left join  [WorkBench].[dbo].[Eligibility_Table_Names_by_Client_RAW_Premier] e
