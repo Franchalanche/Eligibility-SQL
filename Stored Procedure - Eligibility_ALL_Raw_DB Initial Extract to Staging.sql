@@ -3,12 +3,6 @@ GO
 
 CREATE PROCEDURE [dbo].[sp_Eligibility_Aggregation_RAW_Load_to_Staging]
 
---ALTER PROCEDURE [dbo].[sp_Eligibility_Aggregation_RAW_Load_to_Staging]
-
---STAGING TABLE: [xxEligibility_All_RAW]: RENAME TO Eligibility_ALL_Raw_DB_Extraction
---Transformation: Eligibility_ALL_RAW_DB_STAGING
---Load/Finaltable: Eligibility_ALL_RAW_DB_FINAL
-
 AS BEGIN
 
 DROP TABLE IF EXISTS WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING;
@@ -44,7 +38,8 @@ INTO WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
 FROM WorkBench.dbo.xxEligibility_All_RAW--Eligibility_ALL_Raw_DB_Extraction 
 i
 ;
-
+select count(*) as xxEligibility_All_RAW_Count from WorkBench.dbo.xxEligibility_All_RAW;
+select top 200 * from WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING;
 
 
   ------ FILE NAME DATE - COMBINING ALL REGEX LOGIC FROM "File_Name_Date_RegEx.sql":
@@ -284,27 +279,27 @@ UPDATE WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
 
 --------------------------------------------------------------------------------------
 
-	drop table if exists WorkBench.dbo.Eligibility_RawFileNames_v2;
-	select rfn.*
-	, LEFT(
-        RIGHT(rfn.RawFileNameFull, CHARINDEX('\', REVERSE(rfn.RawFileNameFull)) - 1),
-        CHARINDEX('.', RIGHT(rfn.RawFileNameFull, CHARINDEX('\', REVERSE(rfn.RawFileNameFull)) - 1)) - 1
-    ) as Cleaned_Name
-	into WorkBench.dbo.Eligibility_RawFileNames_v2
-	from WorkBench.dbo.Eligibility_RawFileNames rfn
-	;
-
+	update s
+	set s.File_Size = RFN_v4.[FileSize (KB)]
+	, s.Raw_File_TimeStamp = RFN_v4.RawFileDateTime
+	from 	WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING s
+	JOIN WorkBench.dbo.Eligibility_RawFileNames_v4_Combined RFN_v4 
+		on s.[File_Name] = RFN_v4.RawFileNameOnly
+	where s.[File_Name] like '%.csv' or s.[File_Name] like '%.txt'
+		;
 
 	update s
-	set s.File_Size = RFN_v2.[FileSize (KB)]
-	, s.Raw_File_TimeStamp = RFN_v2.RawFileDateTime
+	set s.File_Size = RFN_v4.[FileSize (KB)]
+	, s.Raw_File_TimeStamp = RFN_v4.RawFileDateTime
 	from 	WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING s
-	JOIN WorkBench.dbo.Eligibility_RawFileNames_v2 RFN_v2 
-		on s.[File_Name] = RFN_v2.Cleaned_Name
+	JOIN WorkBench.dbo.Eligibility_RawFileNames_v4_Combined RFN_v4 
+		on s.[File_Name] =  RFN_v4.Cleaned_Name 
+	where s.[File_Name] NOT like '%.csv' or s.[File_Name] NOT like '%.txt'
 		;
 
 
-/*8 Combinations/Scenarios of possibilities for determining ultimate chosen date */
+
+/*8 Combinations/Scenarios of possibilities */
 --Scenario					1 |	2 |	3 |	4 |	5 |	6 |	7 |	8
 -----------------------------------------------------------
 --IS_CreatedDate			Y |	N |	Y |	N |	N |	Y |	Y |	N
@@ -314,13 +309,22 @@ UPDATE WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
 --Raw_File_Timestamp		Y |	N |	N |	N |	Y |	N |	Y |	Y
 
 
-/*SCENARIO 6*/
-/*i believe these generally refer to the raw files deleted OR ARCHIVED after uploading to the DB*/
+select count(distinct [File_Name]) as Deleted_Files
+from WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
+	where Raw_File_TimeStamp = datefromparts(1900,1,1) 
+		and IS_CreatedDate <> datefromparts(1900,1,1) 
+		and File_Name_Date_Cleaned <> datefromparts(1900,1,1)
 
-/*SCENARIO 2 ONLY HAS BLANK File_Name FIELDS! */
+select count(distinct [File_Name]) as All_Files
+from WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
 
 
-
+select distinct top 2000 [Contract], [File_Name]
+from WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
+	where Raw_File_TimeStamp = datefromparts(1900,1,1) 
+		and IS_CreatedDate <> datefromparts(1900,1,1) 
+		and File_Name_Date_Cleaned <> datefromparts(1900,1,1)
+	
 	UPDATE WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
 	set Chosen_Date = 
 		case when 
@@ -362,6 +366,40 @@ UPDATE WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
 				then Raw_File_TimeStamp
 			else Chosen_Date end;
 
+
+	;
+/*QC'ING THE LOGIC*/
+select distinct 
+	  [File_Name]
+	, file_name_date
+	, file_name_date_cleaned
+	, is_createddate
+	, raw_file_timestamp
+	, Chosen_Date
+	, case 	
+		when (datediff(day,Chosen_Date, raw_file_timestamp)>10 and raw_file_timestamp <> datefromparts(1900,1,1)) 
+				then 'Raw File TimeStamp Diff'
+		   when (datediff(day,Chosen_Date, file_name_date_cleaned)>10 and file_name_date_cleaned <> datefromparts(1900,1,1)) 
+				then 'File_name_Date_Cleaned Issue'
+			when (datediff(day,Chosen_Date, IS_CreatedDate)>10 and IS_CreatedDate <> datefromparts(1900,1,1)) 
+				then 'IS Date Issue'
+			else '' end
+			as [Raises Flags?]
+	, count(*) as [Count]
+	FROM WorkBench.dbo.Eligibility_ALL_RAW_DB_STAGING
+	where (datediff(day,Chosen_Date, IS_CreatedDate)>10 and IS_CreatedDate <> datefromparts(1900,1,1)) 
+				OR (datediff(day,Chosen_Date, file_name_date_cleaned)>10 and file_name_date_cleaned <> datefromparts(1900,1,1)) 
+				OR (datediff(day,Chosen_Date, raw_file_timestamp)>10 and raw_file_timestamp <> datefromparts(1900,1,1)) 
+	GROUP BY is_createddate, [File_Name], file_name_date, file_name_date_cleaned, raw_file_timestamp, Chosen_Date
+	order by 
+		case 	
+		when (datediff(day,Chosen_Date, raw_file_timestamp)>10 and raw_file_timestamp <> datefromparts(1900,1,1)) 
+				then 'Raw File TimeStamp Diff'
+		   when (datediff(day,Chosen_Date, file_name_date_cleaned)>10 and file_name_date_cleaned <> datefromparts(1900,1,1)) 
+				then 'File_name_Date_Cleaned Issue'
+			when (datediff(day,Chosen_Date, IS_CreatedDate)>10 and IS_CreatedDate <> datefromparts(1900,1,1)) 
+				then 'IS Date Issue'
+			else '' end
 
 END
 
